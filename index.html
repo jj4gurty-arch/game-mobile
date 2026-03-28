@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💥 Dodge Mania Chaos Max</title>
+<style>
+  body { margin:0; overflow:hidden; background: linear-gradient(to bottom, #4facfe, #00f2fe); font-family:sans-serif; touch-action:none; }
+  canvas { display:block; }
+  #score, #level { position:absolute; left:50%; transform:translateX(-50%); color:#fff; text-shadow:2px 2px #000; }
+  #score { top:20px; font-size:24px; font-weight:bold; }
+  #level { top:60px; font-size:20px; }
+</style>
+</head>
+<body>
+<div id="score">Score: 0</div>
+<div id="level">Level: 1</div>
+<canvas id="game"></canvas>
+<script>
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+let width=window.innerWidth,height=window.innerHeight;
+canvas.width=width;canvas.height=height;
+
+// Player
+let player={x:width/2,y:height-100,size:60,color:'#ff3f3f',speed:15};
+
+// Game vars
+let objects=[],enemies=[],powerUps=[],particles=[],meteors=[],lasers=[];
+let score=0,level=1,gameOver=false,powerActive={shield:false,slow:false,tornado:false,scoreBoost:false},screenShake=0,comboCounter=0;
+
+// Sounds
+const hitSound=new Audio('https://www.soundjay.com/buttons/sounds/button-10.mp3');
+const powerSound=new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3');
+const scoreSound=new Audio('https://www.soundjay.com/button/sounds/button-09.mp3');
+const laserSound=new Audio('https://www.soundjay.com/mechanical/sounds/laser-1.mp3');
+const meteorSound=new Audio('https://www.soundjay.com/explosion/sounds/explosion-02.mp3');
+
+// Helpers
+function random(min,max){return Math.random()*(max-min)+min;}
+function distance(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2);}
+function shakeScreen(intensity){screenShake=intensity;}
+
+// Spawn functions
+function createObject(){ 
+  let size=random(20,50);
+  objects.push({x:random(size,width-size), y:-size, size:size, speed:random(3+level,6+level), color:`hsl(${Math.random()*360},70%,50%)`});
+}
+
+function createEnemy(){
+  let size=50;
+  let type=['normal','fast','zigzag'][Math.floor(Math.random()*3)];
+  enemies.push({x:random(size,width-size),y:-size,size:size,speed:2+level*0.5,color:'#ff0',type:type});
+}
+
+function createPowerUp(){
+  let size=50;
+  let types=['shield','slow','tornado','scoreBoost','explosive'];
+  let type=types[Math.floor(Math.random()*types.length)];
+  let colorMap={shield:'#0ff',slow:'#0f0',tornado:'#f0f',scoreBoost:'#f80',explosive:'#f33'};
+  powerUps.push({x:random(size,width-size),y:-size,size:size,speed:2,type:type,color:colorMap[type]});
+}
+
+function createMeteor(){
+  let size=random(40,80);
+  meteors.push({x:random(size,width-size),y:-size,size:size,speed:random(5+level,10+level),color:'#888'});
+}
+
+// Lasers
+function createLaser(){
+  let y=random(100,height-200);
+  let dir=Math.random()<0.5?-1:1;
+  lasers.push({y:y,width:width,height:10,color:'#f0f',dir:dir,speed:6});
+  laserSound.play();
+}
+
+// Draw
+function drawPlayer(){ctx.fillStyle=powerActive.shield?'#0ff':player.color;ctx.beginPath();ctx.arc(player.x,player.y,player.size/2,0,Math.PI*2);ctx.fill();}
+function drawArray(arr){arr.forEach(o=>{ctx.fillStyle=o.color;ctx.beginPath();ctx.arc(o.x,o.y,o.size/2,0,Math.PI*2);ctx.fill();});}
+function drawPowerUps(){powerUps.forEach(p=>{ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size/2,0,Math.PI*2);ctx.fill();ctx.fillStyle='#000';ctx.font='20px sans-serif';ctx.textAlign='center';let letter=p.type==='shield'?'S':p.type==='slow'?'T':p.type==='tornado'?'R':p.type==='scoreBoost'?'B':'E';ctx.fillText(letter,p.x,p.y+7);});}
+function drawParticles(){particles.forEach((p,i)=>{ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();p.x+=p.vx;p.y+=p.vy;p.life--;if(p.life<=0)particles.splice(i,1);});}
+function drawMeteors(){meteors.forEach(m=>{ctx.fillStyle=m.color;ctx.beginPath();ctx.arc(m.x,m.y,m.size/2,0,Math.PI*2);ctx.fill();});}
+function drawLasers(){lasers.forEach(l=>{ctx.fillStyle=l.color;ctx.fillRect(0,l.y,width,l.height);});}
+
+// Particles
+function createParticles(x,y,color){for(let i=0;i<20;i++){particles.push({x:x,y:y,vx:random(-5,5),vy:random(-5,5),size:random(2,5),color:color,life:20});}}
+
+// Update
+function updateObjects(){
+  objects.forEach((obj,i)=>{obj.y+=obj.speed*(powerActive.slow?0.5:1);if(powerActive.tornado)obj.x+=Math.sin(Date.now()/100)*3;if(distance(obj,player)<obj.size/2+player.size/2){if(powerActive.shield){createParticles(player.x,player.y,obj.color);objects.splice(i,1);powerActive.shield=false;comboCounter++;shakeScreen(5);}else{hitSound.play();gameOver=true;}}if(obj.y-obj.size/2>height){createParticles(obj.x,obj.y,obj.color);objects.splice(i,1);score++;if(powerActive.scoreBoost)score+=2;scoreSound.play();document.getElementById('score').innerText='Score: '+score;if(score%10===0){level++;document.getElementById('level').innerText='Level: '+level;}}});
+  enemies.forEach((e,i)=>{let angle=Math.atan2(player.y-e.y,player.x-e.x);if(e.type==='zigzag')e.x+=Math.sin(Date.now()/200)*2;e.x+=Math.cos(angle)*e.speed*(powerActive.slow?0.5:1);e.y+=Math.sin(angle)*e.speed*(powerActive.slow?0.5:1);if(distance(e,player)<e.size/2+player.size/2){if(powerActive.shield){createParticles(player.x,player.y,e.color);enemies.splice(i,1);powerActive.shield=false;comboCounter++;shakeScreen(5);}else{hitSound.play();gameOver=true;}}});
+  meteors.forEach((m,i)=>{m.y+=m.speed;if(distance(m,player)<m.size/2+player.size/2){if(powerActive.shield){createParticles(player.x,player.y,m.color);meteors.splice(i,1);powerActive.shield=false;comboCounter++;shakeScreen(10);}else{meteorSound.play();gameOver=true;}}if(m.y-m.size/2>height)meteors.splice(i,1);});
+  lasers.forEach((l,i)=>{l.y+=l.dir*l.speed;if(player.y>l.y&&player.y<l.y+l.height){if(!powerActive.shield){hitSound.play();gameOver=true;}else{createParticles(player.x,player.y,'#f0f');lasers.splice(i,1);powerActive.shield=false;comboCounter++;shakeScreen(5);}}if(l.y+l.height<0||l.y>height)lasers.splice(i,1);});
+}
+
+function updatePowerUps(){
+  powerUps.forEach((p,i)=>{p.y+=p.speed;if(distance(p,player)<p.size/2+player.size/2){powerSound.play();if(p.type==='shield')powerActive.shield=true;else if(p.type==='slow'){powerActive.slow=true;setTimeout(()=>powerActive.slow=false,5000);}else if(p.type==='tornado'){powerActive.tornado=true;setTimeout(()=>powerActive.tornado=false,5000);}else if(p.type==='scoreBoost'){powerActive.scoreBoost=true;setTimeout(()=>powerActive.scoreBoost=false,5000);}else if(p.type==='explosive'){createParticles(player.x,player.y,'#f33');objects=[];enemies=[];meteors=[];score+=5;document.getElementById('score').innerText='Score: '+score;shakeScreen(10);}createParticles(player.x,player.y,p.color);comboCounter++;shakeScreen(3);powerUps.splice(i,1);}if(p.y-p.size/2>height)powerUps.splice(i,1);});
+}
+
+// Game loop
+function gameLoop(){
+  ctx.save();
+  if(screenShake>0){let sx=random(-screenShake,screenShake);let sy=random(-screenShake,screenShake);ctx.translate(sx,sy);screenShake-=0.5;}
+  if(gameOver){ctx.restore();ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,width,height);ctx.fillStyle='#fff';ctx.font='48px sans-serif';ctx.textAlign='center';ctx.fillText('Game Over!',width/2,height/2-20);ctx.fillText('Score: '+score,width/2,height/2+40);return;}
+  ctx.clearRect(0,0,width,height);drawPlayer();drawArray(objects);drawArray(enemies);drawPowerUps();drawParticles();drawMeteors();drawLasers();
+  updateObjects();updatePowerUps();
+  ctx.restore();
+  requestAnimationFrame(gameLoop);
+}
+
+// Touch
+canvas.addEventListener('touchmove',e=>{let t=e.touches[0];player.x=t.clientX;player.y=t.clientY;});
+
+// Spawn intervals
+setInterval(createObject,500);
+setInterval(()=>{if(Math.random()<0.5)createEnemy();},2500);
+setInterval(()=>{if(Math.random()<0.4)createPowerUp();},5000);
+setInterval(()=>{if(Math.random()<0.1)createMeteor();},3000);
+setInterval(()=>{if(Math.random()<0.05)createLaser();},4000);
+
+// Resize
+window.addEventListener('resize',()=>{width=window.innerWidth;height=window.innerHeight;canvas.width=width;canvas.height=height;});
+
+gameLoop();
+</script>
+</body>
+</html>
